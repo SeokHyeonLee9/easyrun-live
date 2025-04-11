@@ -21,7 +21,13 @@ const db = getDatabase(app);
 
 function MyLocationButton({ position }) {
   const map = useMap();
+  
+  if (position === null) {
+    return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>위치 정보를 불러오는 중입니다...</h3></div>;
+  }
+
   return (
+
     <button
       style={{
         position: 'absolute',
@@ -94,7 +100,13 @@ function EasyRunLive() {
         if (data) setUsers(data);
       });
     }
-    return () => intervalId && clearInterval(intervalId);
+    
+  if (position === null) {
+    return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>위치 정보를 불러오는 중입니다...</h3></div>;
+  }
+
+  return (
+) => intervalId && clearInterval(intervalId);
   }, [role]);
 
   function getDistance([lat1, lon1], [lat2, lon2]) {
@@ -108,8 +120,19 @@ function EasyRunLive() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  
   if (!role) {
-    return (
+    if (!navigator.geolocation) {
+      return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>이 브라우저는 위치 정보를 지원하지 않습니다.</h3></div>;
+    }
+
+    
+  if (position === null) {
+    return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>위치 정보를 불러오는 중입니다...</h3></div>;
+  }
+
+  return (
+
       <div style={{ textAlign: 'center', paddingTop: '40px' }}>
         <img src="/logo.jpg" alt="EASYRUN Logo" style={{ width: '160px', marginBottom: '20px' }} />
         <h2>EASYRUN LIVE</h2>
@@ -126,7 +149,13 @@ function EasyRunLive() {
     );
   }
 
+  
+  if (position === null) {
+    return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>위치 정보를 불러오는 중입니다...</h3></div>;
+  }
+
   return (
+
     <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
       <div style={{
         position: 'absolute',
@@ -147,7 +176,13 @@ function EasyRunLive() {
           const isRunner = val.role === 'runner';
           const isSupporter = val.role === 'supporter';
           const flashColor = isRunner ? 'red' : 'blue';
-          return (
+          
+  if (position === null) {
+    return <div style={{ textAlign: 'center', marginTop: '80px' }}><h3>위치 정보를 불러오는 중입니다...</h3></div>;
+  }
+
+  return (
+
             <Circle
               key={key}
               center={[val.lat, val.lng]}
