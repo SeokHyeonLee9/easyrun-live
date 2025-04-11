@@ -67,7 +67,7 @@ export default function EasyRunLive() {
                 const paceMin = (10 / 60) / dist;
                 const minutes = Math.floor(paceMin);
                 const seconds = Math.round((paceMin - minutes) * 60);
-                setPace(f"{minutes}:{'0' + str(seconds) if seconds < 10 else seconds}");
+                setPace(`${minutes}:${seconds < 10 ? "0" + seconds : seconds}`);
                 setStatus("");
               }
             }
