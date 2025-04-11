@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, Circle, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -19,33 +19,67 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-const icon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
-});
+function MyLocationButton({ position }) {
+  const map = useMap();
+  return (
+    <button
+      style={{
+        position: 'absolute',
+        bottom: '80px',
+        right: '10px',
+        zIndex: 1000,
+        padding: '8px 12px',
+        background: 'white',
+        border: '1px solid gray',
+        borderRadius: '4px',
+        cursor: 'pointer'
+      }}
+      onClick={() => position && map.setView(position, 15)}
+    >
+      내 위치
+    </button>
+  );
+}
 
 function EasyRunLive() {
   const [role, setRole] = useState(null);
   const [nickname, setNickname] = useState('');
   const [position, setPosition] = useState(null);
-  const [runners, setRunners] = useState({});
+  const [users, setUsers] = useState({});
   const [intervalId, setIntervalId] = useState(null);
+  const [pace, setPace] = useState('');
+  const [prevTime, setPrevTime] = useState(null);
+  const [prevPos, setPrevPos] = useState(null);
+  const mapRef = useRef(null);
 
   const handleStart = (selectedRole) => {
     if (!nickname) return alert('닉네임을 입력하세요.');
     setRole(selectedRole);
-
     const id = setInterval(() => {
       navigator.geolocation.getCurrentPosition((pos) => {
         const coords = [pos.coords.latitude, pos.coords.longitude];
         setPosition(coords);
+
+        const now = Date.now();
+        if (prevTime && prevPos) {
+          const distance = getDistance(prevPos, coords);
+          const timeDiffMin = (now - prevTime) / 60000;
+          const speed = distance / timeDiffMin;
+          const paceMin = speed === 0 ? 0 : 1 / speed;
+          const minutes = Math.floor(paceMin);
+          const seconds = Math.round((paceMin - minutes) * 60);
+          setPace(`${minutes}:${seconds < 10 ? '0' + seconds : seconds}`);
+        }
+        setPrevTime(now);
+        setPrevPos(coords);
+
         const [lat, lng] = coords;
-        set(ref(db, `runners/${nickname}`), {
+        set(ref(db, `users/${nickname}`), {
           nickname,
           lat,
           lng,
-          timestamp: Date.now()
+          timestamp: now,
+          role
         });
       });
     }, 1000);
@@ -54,21 +88,30 @@ function EasyRunLive() {
 
   useEffect(() => {
     if (role) {
-      const runnersRef = ref(db, 'runners');
-      onValue(runnersRef, (snapshot) => {
+      const usersRef = ref(db, 'users');
+      onValue(usersRef, (snapshot) => {
         const data = snapshot.val();
-        if (data) {
-          setRunners(data);
-        }
+        if (data) setUsers(data);
       });
     }
     return () => intervalId && clearInterval(intervalId);
   }, [role]);
 
+  function getDistance([lat1, lon1], [lat2, lon2]) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   if (!role) {
     return (
       <div style={{ textAlign: 'center', paddingTop: '40px' }}>
-        <img src="/logo.png" alt="EASYRUN Logo" style={{ width: '160px', marginBottom: '20px' }} />
+        <img src="/logo.jpg" alt="EASYRUN Logo" style={{ width: '160px', marginBottom: '20px' }} />
         <h2>EASYRUN LIVE</h2>
         <input
           placeholder="닉네임 입력"
@@ -84,25 +127,57 @@ function EasyRunLive() {
   }
 
   return (
-    <div style={{ height: '100vh', width: '100%' }}>
-      <MapContainer center={position || [37.5665, 126.978]} zoom={14} style={{ height: '100%' }}>
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {position && (
-          <Marker position={position} icon={icon}>
-            <Popup>{nickname} (나)</Popup>
-          </Marker>
-        )}
-        {Object.entries(runners).map(([key, val]) => {
-          if (key === nickname) return null;
+    <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
+      <div style={{
+        position: 'absolute',
+        top: 10,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1000,
+        backgroundColor: 'white',
+        padding: '4px 12px',
+        borderRadius: '8px',
+        fontWeight: 'bold'
+      }}>EASYRUN MARATHON LIVE</div>
+      <MapContainer center={position || [37.5665, 126.978]} zoom={15} style={{ height: '100%' }} ref={mapRef}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <MyLocationButton position={position} />
+        {Object.entries(users).map(([key, val]) => {
+          const isSelf = key === nickname;
+          const isRunner = val.role === 'runner';
+          const isSupporter = val.role === 'supporter';
+          const flashColor = isRunner ? 'red' : 'blue';
           return (
-            <Marker key={key} position={[val.lat, val.lng]} icon={icon}>
-              <Popup>{val.nickname}</Popup>
-            </Marker>
+            <Circle
+              key={key}
+              center={[val.lat, val.lng]}
+              radius={15}
+              pathOptions={{
+                color: flashColor,
+                fillColor: flashColor,
+                fillOpacity: 0.6
+              }}
+            >
+              <Popup>
+                <b>{val.nickname}</b><br />
+                {isRunner && !isSelf && `페이스: ${pace || '측정 중...'}`}
+              </Popup>
+            </Circle>
           );
         })}
       </MapContainer>
+      <a href="https://www.instagram.com/easyrun_crew/"
+         target="_blank"
+         rel="noreferrer"
+         style={{
+           position: 'absolute',
+           bottom: 10,
+           right: 10,
+           zIndex: 1000
+         }}
+      >
+        <img src="/logo.jpg" alt="EASYRUN" style={{ width: '60px', borderRadius: '8px' }} />
+      </a>
     </div>
   );
 }
