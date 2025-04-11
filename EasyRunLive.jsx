@@ -2,6 +2,21 @@ import { useEffect, useState, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, onValue } from "firebase/database";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD-EASYRUN-DEMO-KEY",
+  authDomain: "easyrun-demo.firebaseapp.com",
+  databaseURL: "https://easyrun-demo-default-rtdb.firebaseio.com",
+  projectId: "easyrun-demo",
+  storageBucket: "easyrun-demo.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:example"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 function RecenterButton({ position }) {
   const map = useMap();
@@ -33,6 +48,7 @@ export default function EasyRunLive() {
   const [distance, setDistance] = useState(0);
   const [pace, setPace] = useState("0:00");
   const [status, setStatus] = useState("");
+  const [runners, setRunners] = useState({});
   const lastPositionRef = useRef(null);
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -56,6 +72,17 @@ export default function EasyRunLive() {
           const coords = [pos.coords.latitude, pos.coords.longitude];
           setPosition(coords);
 
+          const [lat, lng] = coords;
+          set(ref(db, `runners/${nickname}`), {
+            nickname,
+            lat,
+            lng,
+            pace,
+            distance,
+            status,
+            timestamp: Date.now()
+          });
+
           setPath((prev) => {
             if (prev.length > 0) {
               const [lastLat, lastLng] = prev[prev.length - 1];
@@ -76,8 +103,16 @@ export default function EasyRunLive() {
         });
       }, 10000);
       return () => clearInterval(interval);
+    } else if (role === "supporter") {
+      const runnersRef = ref(db, "runners");
+      onValue(runnersRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setRunners(data);
+        }
+      });
     }
-  }, [role]);
+  }, [role, nickname]);
 
   return (
     <div style={{ padding: 20 }}>
@@ -103,23 +138,40 @@ export default function EasyRunLive() {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
             {role === "runner" && position && (
-              <>
+              <CircleMarker
+                center={position}
+                radius={10}
+                pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.8 }}
+                className="blinking"
+              >
+                <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
+                  <div style={{ textAlign: "center" }}>
+                    <strong>{nickname}</strong><br />
+                    {status ? status : `페이스: ${pace}분/km`}<br />
+                    거리: {distance.toFixed(2)}km
+                  </div>
+                </Tooltip>
+              </CircleMarker>
+            )}
+
+            {role === "supporter" &&
+              Object.entries(runners).map(([key, runner]) => (
                 <CircleMarker
-                  center={position}
+                  key={key}
+                  center={[runner.lat, runner.lng]}
                   radius={10}
-                  pathOptions={{ color: "red", fillColor: "red", fillOpacity: 0.8 }}
-                  className="blinking"
+                  pathOptions={{ color: "blue", fillColor: "blue", fillOpacity: 0.8 }}
                 >
                   <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
                     <div style={{ textAlign: "center" }}>
-                      <strong>{nickname}</strong><br />
-                      {status ? status : `페이스: ${pace}분/km`}<br />
-                      거리: {distance.toFixed(2)}km
+                      <strong>{runner.nickname}</strong><br />
+                      {runner.status ? runner.status : `페이스: ${runner.pace}분/km`}<br />
+                      거리: {runner.distance?.toFixed(2) || 0}km
                     </div>
                   </Tooltip>
                 </CircleMarker>
-              </>
-            )}
+              ))}
+
             {role === "runner" && path.length > 1 && <Polyline positions={path} />}
             {position && <RecenterButton position={position} />}
           </MapContainer>
